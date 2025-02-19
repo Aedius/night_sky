@@ -13,5 +13,5 @@ rand = "0.9"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 
 [dependencies.web-sys]
-features = ['CanvasRenderingContext2d', 'Document', 'Element', 'HtmlCanvasElement', 'Window']
+features = ['CanvasRenderingContext2d', 'Document', 'Element', 'HtmlCanvasElement', 'Window', 'console']
 version = "0.3"
