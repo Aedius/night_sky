@@ -1,1 +1,2 @@
-rustflags = --cfg getrandom_backend="linux_getrandom"
+[build]
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
