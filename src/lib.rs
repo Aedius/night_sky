@@ -1,3 +1,4 @@
+use crate::PointKind::{Big, Small};
 use rand::prelude::ThreadRng;
 use rand::Rng;
 use std::f64;
@@ -35,8 +36,9 @@ fn generate_cloud(
     global_width: u32,
     global_height: u32,
     ctx: &CanvasRenderingContext2d,
-    mut rng: &mut ThreadRng,
+    rng: &mut ThreadRng,
 ) {
+    // not working
     let min_x = -0.5 * global_width as f64;
     let min_y = -0.5 * global_height as f64;
     let max_x = 1.5 * global_width as f64;
@@ -45,6 +47,7 @@ fn generate_cloud(
     for _ in 0..rng.random_range(1..3) {
         ctx.begin_path();
         let start = Point {
+            kind: Small,
             x: rng.random_range(min_x..max_x),
             y: rng.random_range(min_y..maw_y),
         };
@@ -52,11 +55,13 @@ fn generate_cloud(
 
         for _ in 0..rng.random_range(1..3) {
             let next = Point {
+                kind: Small,
                 x: rng.random_range(min_x..max_x),
                 y: rng.random_range(min_y..maw_y),
             };
 
             let bezier = Point {
+                kind: Small,
                 x: rng.random_range(min_x..max_x),
                 y: rng.random_range(min_y..maw_y),
             };
@@ -64,6 +69,7 @@ fn generate_cloud(
             ctx.quadratic_curve_to(bezier.x, bezier.y, next.x, next.y)
         }
         let bezier = Point {
+            kind: Small,
             x: rng.random_range(min_x..max_x),
             y: rng.random_range(min_y..maw_y),
         };
@@ -95,10 +101,11 @@ fn generate_closest_stars(
 ) {
     for _ in 0..rng.random_range(8..20) {
         let p = Point {
+            kind: Big,
             x: rng.random_range(0..global_width) as f64,
             y: rng.random_range(0..global_height) as f64,
         };
-        p.draw(&ctx, &mut rng, true);
+        p.draw(&ctx, &mut rng);
     }
 }
 
@@ -110,16 +117,18 @@ fn generate_cluster_stars(
 ) {
     for _ in 0..rng.random_range(6..20) {
         let p = Point {
+            kind: Small,
             x: rng.random_range(0..global_width) as f64,
             y: rng.random_range(0..global_height) as f64,
         };
         let size = rng.random_range(40. ..75.);
         for _ in 5..rng.random_range(10..50) {
             let np = Point {
+                kind: Small,
                 x: p.x + rng.random_range(-size..size),
                 y: p.y + rng.random_range(-size..size),
             };
-            np.draw(&ctx, &mut rng, false);
+            np.draw(&ctx, &mut rng);
         }
     }
 }
@@ -132,11 +141,12 @@ fn generate_base_stars(
 ) {
     for _ in 0..global_width * global_height / rng.random_range(500..1500) {
         let p = Point {
+            kind: Small,
             x: rng.random_range(0..global_width) as f64,
             y: rng.random_range(0..global_height) as f64,
         };
 
-        p.draw(&ctx, &mut rng, false);
+        p.draw(&ctx, &mut rng);
     }
 }
 
@@ -151,10 +161,12 @@ fn generate_galaxy(
     let (start_side, end_side) = if side {
         (
             Point {
+                kind: Small,
                 x: -100.,
                 y: rng.random_range(0..global_height) as f64 - 100.,
             },
             Point {
+                kind: Small,
                 x: global_width as f64 + 100.,
                 y: rng.random_range(0..global_height) as f64 + 100.,
             },
@@ -162,10 +174,12 @@ fn generate_galaxy(
     } else {
         (
             Point {
+                kind: Small,
                 x: rng.random_range(0..global_width) as f64 - 100.,
                 y: -100.,
             },
             Point {
+                kind: Small,
                 x: rng.random_range(0..global_width) as f64 + 100.,
                 y: global_height as f64 + 100.,
             },
@@ -199,10 +213,11 @@ fn generate_galaxy(
 
     for i in 0..nb as u32 {
         let s = Point {
+            kind: Small,
             x: start_side.x + i as f64 * x_step + rng.random_range(-size..size),
             y: start_side.y + i as f64 * y_step + rng.random_range(-size..size),
         };
-        s.draw(ctx, rng, false);
+        s.draw(ctx, rng);
     }
 }
 
@@ -236,7 +251,14 @@ fn get_context(
 }
 
 impl Point {
-    fn draw(&self, ctx: &CanvasRenderingContext2d, rng: &mut ThreadRng, big: bool) {
+    fn draw(&self, ctx: &CanvasRenderingContext2d, rng: &mut ThreadRng) {
+        match self.kind {
+            Small => self.draw_small(ctx, rng),
+            Big => self.draw_big(ctx, rng),
+        }
+    }
+
+    fn draw_small(&self, ctx: &CanvasRenderingContext2d, rng: &mut ThreadRng) {
         let color = format!(
             "rgb({r},{g},{b})",
             r = rng.random_range(150..255),
@@ -244,19 +266,63 @@ impl Point {
             b = rng.random_range(150..255)
         );
 
+        ctx.set_shadow_color(&color);
+        ctx.set_shadow_blur(1.);
         ctx.set_fill_style_str(&color);
-        if big {
-            let size = 5.;
-            ctx.fill_rect(self.x, self.y, size, size);
-        } else {
-            let size = rng.random_range(0.1..1.9);
-            ctx.fill_rect(self.x, self.y, size, size);
-        }
+
+        let size = rng.random_range(0.1..1.9);
+        ctx.fill_rect(self.x, self.y, size, size);
+
+        ctx.set_shadow_blur(0.);
+    }
+    fn draw_big(&self, ctx: &CanvasRenderingContext2d, rng: &mut ThreadRng) {
+        let size = rng.random_range(2. ..6.);
+
+        let color_center = format!(
+            "rgb({r},{g},{b})",
+            r = rng.random_range(200..255),
+            g = rng.random_range(200..255),
+            b = rng.random_range(200..255)
+        );
+        let color_middle = format!(
+            "rgba({r},{g},{b},0.5)",
+            r = rng.random_range(150..255),
+            g = rng.random_range(150..255),
+            b = rng.random_range(150..255)
+        );
+        let color_outside = "rgb(0,0,0, 0)";
+
+        let gradient = ctx
+            .create_radial_gradient(self.x, self.y, size *0.8, self.x, self.y, size)
+            .map_err(|e|
+                console::log_1(&e)
+            ).unwrap();
+
+        gradient.add_color_stop(0., &color_center) .map_err(|e|
+            console::log_1(&e)
+        ).unwrap();
+        gradient.add_color_stop(0.5, &color_middle) .map_err(|e|
+            console::log_1(&e)
+        ).unwrap();
+        gradient.add_color_stop(1., color_outside) .map_err(|e|
+            console::log_1(&e)
+        ).unwrap();
+
+        ctx.set_fill_style_canvas_gradient(&gradient);
+
+        ctx.fill_rect(self.x - size, self.y - size, size*2., size*2.);
     }
 }
 
 #[derive(Debug)]
 struct Point {
+    kind: PointKind,
     x: f64,
     y: f64,
+}
+
+#[derive(Debug)]
+enum PointKind {
+    Small,
+    Big,
 }
