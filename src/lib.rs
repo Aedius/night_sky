@@ -1,11 +1,11 @@
 use crate::PointKind::{Big, Small};
 use rand::prelude::ThreadRng;
-use rand::Rng;
+use rand::{Rng, random_range};
 use std::f64;
+use wasm_bindgen::Clamped;
 use wasm_bindgen::prelude::*;
-use web_sys::console;
-use web_sys::js_sys::Math::{pow, sqrt};
 use web_sys::CanvasRenderingContext2d;
+use web_sys::{ImageData, console};
 
 #[wasm_bindgen]
 pub fn run() {
@@ -17,80 +17,20 @@ pub fn run() {
     let global_width: u32 = global_width_f as u32;
     let global_height: u32 = global_height_f as u32;
 
-    let ctx = get_context(global_width_f, global_height_f, global_width, global_height);
-
     let mut rng = rand::rng();
 
-    generate_galaxy(global_width, global_height, &ctx, &mut rng);
+    let ctx = get_context(
+        global_width,
+        global_height,
+    );
+
+    generate_background_color(global_width, global_height, &ctx, &mut rng);
 
     generate_base_stars(global_width, global_height, &ctx, &mut rng);
 
     generate_cluster_stars(global_width, global_height, &ctx, &mut rng);
 
     generate_closest_stars(global_width, global_height, &ctx, &mut rng);
-
-    generate_cloud(global_width, global_height, &ctx, &mut rng);
-}
-
-fn generate_cloud(
-    global_width: u32,
-    global_height: u32,
-    ctx: &CanvasRenderingContext2d,
-    rng: &mut ThreadRng,
-) {
-    // not working
-    let min_x = -0.5 * global_width as f64;
-    let min_y = -0.5 * global_height as f64;
-    let max_x = 1.5 * global_width as f64;
-    let maw_y = 1.5 * global_height as f64;
-
-    for _ in 0..rng.random_range(1..3) {
-        ctx.begin_path();
-        let start = Point {
-            kind: Small,
-            x: rng.random_range(min_x..max_x),
-            y: rng.random_range(min_y..maw_y),
-        };
-        ctx.move_to(start.x, start.y);
-
-        for _ in 0..rng.random_range(1..3) {
-            let next = Point {
-                kind: Small,
-                x: rng.random_range(min_x..max_x),
-                y: rng.random_range(min_y..maw_y),
-            };
-
-            let bezier = Point {
-                kind: Small,
-                x: rng.random_range(min_x..max_x),
-                y: rng.random_range(min_y..maw_y),
-            };
-
-            ctx.quadratic_curve_to(bezier.x, bezier.y, next.x, next.y)
-        }
-        let bezier = Point {
-            kind: Small,
-            x: rng.random_range(min_x..max_x),
-            y: rng.random_range(min_y..maw_y),
-        };
-        ctx.quadratic_curve_to(bezier.x, bezier.y, start.x, start.y);
-
-        let grey = rng.random_range(0..50);
-
-        let color = format!(
-            "rgba({r},{g},{b},{a})",
-            r = grey,
-            g = grey,
-            b = grey,
-            a = rng.random_range(0.01..0.08),
-        );
-
-        ctx.set_shadow_color(&color);
-        ctx.set_shadow_blur(200.);
-        ctx.set_fill_style_str(&color);
-
-        ctx.fill();
-    }
 }
 
 fn generate_closest_stars(
@@ -99,7 +39,7 @@ fn generate_closest_stars(
     ctx: &CanvasRenderingContext2d,
     mut rng: &mut ThreadRng,
 ) {
-    for _ in 0..rng.random_range(8..20) {
+    for _ in 0..rng.random_range(10..40) {
         let p = Point {
             kind: Big,
             x: rng.random_range(0..global_width) as f64,
@@ -115,7 +55,7 @@ fn generate_cluster_stars(
     ctx: &CanvasRenderingContext2d,
     mut rng: &mut ThreadRng,
 ) {
-    for _ in 0..rng.random_range(6..20) {
+    for _ in 0..rng.random_range(15..40) {
         let p = Point {
             kind: Small,
             x: rng.random_range(0..global_width) as f64,
@@ -139,7 +79,7 @@ fn generate_base_stars(
     ctx: &CanvasRenderingContext2d,
     mut rng: &mut ThreadRng,
 ) {
-    for _ in 0..global_width * global_height / rng.random_range(500..1500) {
+    for _ in 0..global_width * global_height / rng.random_range(300..900) {
         let p = Point {
             kind: Small,
             x: rng.random_range(0..global_width) as f64,
@@ -150,80 +90,76 @@ fn generate_base_stars(
     }
 }
 
-fn generate_galaxy(
+fn generate_background_color(
     global_width: u32,
     global_height: u32,
     ctx: &CanvasRenderingContext2d,
     rng: &mut ThreadRng,
 ) {
-    let side = rng.random_ratio(global_height, global_height + global_width);
+    // based on : https://gist.github.com/donpark/1796361
 
-    let (start_side, end_side) = if side {
-        (
-            Point {
-                kind: Small,
-                x: -100.,
-                y: rng.random_range(0..global_height) as f64 - 100.,
-            },
-            Point {
-                kind: Small,
-                x: global_width as f64 + 100.,
-                y: rng.random_range(0..global_height) as f64 + 100.,
-            },
-        )
-    } else {
-        (
-            Point {
-                kind: Small,
-                x: rng.random_range(0..global_width) as f64 - 100.,
-                y: -100.,
-            },
-            Point {
-                kind: Small,
-                x: rng.random_range(0..global_width) as f64 + 100.,
-                y: global_height as f64 + 100.,
-            },
-        )
-    };
+    let image_data = ctx
+        .get_image_data(0., 0., global_width as f64, global_height as f64)
+        .map_err(|e| console::log_1(&e))
+        .unwrap();
 
-    let color = format!(
-        "rgba({r},{g},{b},{a})",
-        r = rng.random_range(150..255),
-        g = rng.random_range(150..255),
-        b = rng.random_range(150..255),
-        a = rng.random_range(0.005..0.01),
-    );
-    ctx.set_stroke_style_str(&color);
-    for i in 0..20 {
-        ctx.set_line_width(i as f64 * 10.);
-        ctx.move_to(start_side.x, start_side.y);
-        ctx.line_to(end_side.x, end_side.y);
-        ctx.stroke();
+    let mut data = image_data.data();
+
+    let alpha = 230u8;
+    let base1 = rng.random_range(10u8..80u8);
+    let base2 = rng.random_range(10u8..80u8);
+    let base3 = rng.random_range(10u8..80u8);
+
+    for (pos, chan) in data.iter_mut().enumerate() {
+        match (pos + 1) % 4 {
+            0 => {
+                *chan = alpha;
+            }
+            1 => *chan = rng.random_range(0u8..base1),
+            2 => *chan = rng.random_range(0u8..base2),
+            _ => *chan = rng.random_range(0u8..base3),
+        }
     }
 
-    let length = sqrt(pow(end_side.x - start_side.x, 2.) + pow(end_side.y - start_side.y, 2.));
+    let slice_data = Clamped(&data.0[..]);
+    let image_data =
+        ImageData::new_with_u8_clamped_array_and_sh(slice_data, global_width, global_height)
+            .map_err(|e| console::log_1(&e))
+            .unwrap();
 
-    let nb = rng.random_range(length / 7. ..length / 2.);
+    ctx.put_image_data(&image_data, 0., 0.)
+        .map_err(|e| console::log_1(&e))
+        .unwrap();
 
-    let x_step = (end_side.x - start_side.x) / nb;
-    let y_step = (end_side.y - start_side.y) / nb;
+    ctx.save();
 
-    let size = rng.random_range(25. ..40.);
-    console::log_1(&format!("nb {nb} size {size}").into());
+    let mut size = 8;
 
-    for i in 0..nb as u32 {
-        let s = Point {
-            kind: Small,
-            x: start_side.x + i as f64 * x_step + rng.random_range(-size..size),
-            y: start_side.y + i as f64 * y_step + rng.random_range(-size..size),
-        };
-        s.draw(ctx, rng);
+    while size < global_width {
+        let x = random_range(0..global_width - size);
+        let y = random_range(0..global_height - size);
+        ctx.set_global_alpha(4. / size as f64);
+        ctx.draw_image_with_html_canvas_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+            &ctx.canvas().unwrap(),
+            x as f64,
+            y as f64,
+            size as f64,
+            size as f64,
+            0.,
+            0.,
+            global_width as f64,
+            global_height as f64,
+        )
+        .map_err(|e| console::log_1(&e))
+        .unwrap();
+
+        size *= 4;
     }
+
+    ctx.restore()
 }
 
 fn get_context(
-    global_width_f: f64,
-    global_height_f: f64,
     global_width: u32,
     global_height: u32,
 ) -> CanvasRenderingContext2d {
@@ -245,8 +181,6 @@ fn get_context(
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
 
-    ctx.set_fill_style_str("black");
-    ctx.fill_rect(0., 0., global_width_f, global_height_f);
     ctx
 }
 
@@ -293,10 +227,9 @@ impl Point {
         let color_outside = "rgb(0,0,0, 0)";
 
         let gradient = ctx
-            .create_radial_gradient(self.x, self.y, size *0.8, self.x, self.y, size)
-            .map_err(|e|
-                console::log_1(&e)
-            ).unwrap();
+            .create_radial_gradient(self.x, self.y, size * 0.8, self.x, self.y, size)
+            .map_err(|e| console::log_1(&e))
+            .unwrap();
 
         gradient.add_color_stop(0., &color_center) .map_err(|e|
             console::log_1(&e)
@@ -310,7 +243,7 @@ impl Point {
 
         ctx.set_fill_style_canvas_gradient(&gradient);
 
-        ctx.fill_rect(self.x - size, self.y - size, size*2., size*2.);
+        ctx.fill_rect(self.x - size, self.y - size, size * 2., size * 2.);
     }
 }
 
